@@ -68,7 +68,15 @@ def read_image(cam, boxsize, dep_stream):
     kernel = np.ones((5, 5), np.uint8)
     hand_mask = cv2.dilate(hand_mask, kernel, iterations=1)
 
+    h, w = hand_mask.shape[:2]
+    width_cal = -14.5
+    height_cal = -5.0
+    M = np.float32([[1, 0, width_cal], [0, 1, height_cal]])
 
+    hand_mask = cv2.warpAffine(hand_mask, M, (w, h))
+    depth_img_uint8 = cv2.warpAffine(depth_img_uint8, M, (w, h))
+
+    # hand_mask.shape = (1, 480, 640)
     imageToTest = cv2.resize(oriImg, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_LANCZOS4)
     d_imageToTest = cv2.resize(depth_img_uint8, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_LANCZOS4)
 
@@ -82,7 +90,12 @@ def read_image(cam, boxsize, dep_stream):
     imageToTest_process = cv2.add(foreground, background)
     imageToTest_process = np.array(imageToTest_process, dtype=np.uint8)
 
-
+    # Get Skeleton from Depth
+    b, g, r = cv2.split(hand_mask)
+    tmp = np.ones(b.shape)
+    tmp = tmp * (-20)
+    b -= np.uint8(tmp)
+    hand_mask = cv2.merge([b, g, r])
 
     output_img = np.ones((boxsize, boxsize, 3)) * 128
     processed_img = np.ones((boxsize, boxsize, 3)) * 128

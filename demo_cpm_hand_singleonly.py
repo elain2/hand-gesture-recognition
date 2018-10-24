@@ -42,10 +42,10 @@ tf.app.flags.DEFINE_bool('KALMAN_ON',
                          default_value=True,
                          docstring='enable kalman filter')
 tf.app.flags.DEFINE_float('kalman_noise',
-                            default_value=3e-2,
-                            docstring='Kalman filter noise value')
+                          default_value=3e-2,
+                          docstring='Kalman filter noise value')
 tf.app.flags.DEFINE_bool('WRITE_JSON',
-                         default_value=True,
+                         default_value=False,
                          docstring='enable json write')
 
 # Set color for each finger
@@ -55,7 +55,6 @@ joint_color_code = [[139, 53, 255],
                     [37, 168, 36],
                     [147, 147, 0],
                     [70, 17, 145]]
-
 
 limbs = [[0, 1],
          [1, 2],
@@ -84,6 +83,7 @@ if sys.version_info.major == 3:
 else:
     PYTHON_VERSION = 2
 
+
 def main(argv):
     tf_device = '/gpu:0'
     with tf.device(tf_device):
@@ -93,9 +93,9 @@ def main(argv):
     frame_num = 0
 
     input_data = tf.placeholder(dtype=tf.float32, shape=[None, FLAGS.input_size, FLAGS.input_size, 3],
-                                        name='input_image')
+                                name='input_image')
     center_map = tf.placeholder(dtype=tf.float32, shape=[None, FLAGS.input_size, FLAGS.input_size, 1],
-                                    name='center_map')
+                                name='center_map')
 
     model = cpm_hand_slim.CPM_Model(FLAGS.stages, FLAGS.joints + 1)
     model.build_model(input_data, center_map, 1)
@@ -106,13 +106,14 @@ def main(argv):
 
     sess.run(tf.global_variables_initializer())
     model.load_weights_from_file(FLAGS.model_path, sess, False)
-    
+
     test_center_map = cpm_utils.gaussian_img(FLAGS.input_size, FLAGS.input_size, FLAGS.input_size / 2,
                                              FLAGS.input_size / 2,
                                              FLAGS.cmap_radius)
     test_center_map = np.reshape(test_center_map, [1, FLAGS.input_size, FLAGS.input_size, 1])
 
     # Check weights
+
     for variable in tf.trainable_variables():
         with tf.variable_scope('', reuse=True):
             var = tf.get_variable(variable.name.split(':0')[0])
@@ -145,7 +146,7 @@ def main(argv):
 
         while True:
             # t1 = time.time()
-            orig_img, test_img, depth_map, hand = cpm_utils.read_image(cam, FLAGS.input_size, depth_stream)
+            orig_img, test_img, depth_map = cpm_utils.read_image(cam, FLAGS.input_size, depth_stream)
 
             test_img_resize = cv2.resize(test_img, (FLAGS.input_size, FLAGS.input_size))
             # print('img read time %f' % (time.time() - t1))
@@ -156,15 +157,13 @@ def main(argv):
             # Inference
             t1 = time.time()
             stage_heatmap_np = sess.run([model.stage_heatmap[5]],
-                                            feed_dict={'input_image:0': test_img_input,
-                                                       'center_map:0': test_center_map})
+                                        feed_dict={'input_image:0': test_img_input,
+                                                   'center_map:0': test_center_map})
 
             # Show visualized image
-            demo_img = visualize_result(test_img, orig_img, FLAGS, stage_heatmap_np, kalman_filter_array, frame_num, depth_map)
-            cv2.imshow('org img', orig_img)
-            cv2.imshow('processed img', test_img)
+            demo_img = visualize_result(test_img, orig_img, FLAGS, stage_heatmap_np, kalman_filter_array, frame_num,
+                                        depth_map)
             cv2.imshow('current depth', depth_map)
-            cv2.imshow('hand depth only', hand)
             cv2.imshow('current heatmap', demo_img.astype(np.uint8))
             if cv2.waitKey(1) == ord('q'): break
             print('fps: %.2f' % (1 / (time.time() - t1)))
